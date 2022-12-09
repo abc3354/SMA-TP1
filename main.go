@@ -2,7 +2,6 @@ package main
 
 import (
 	"SMA-TP1/mail"
-	"fmt"
 )
 
 func main() {
@@ -10,18 +9,10 @@ func main() {
 	go mail.Start(ready)
 	<-ready
 
-	alice := mail.Register(mail.Fournisseur)
-	bob := mail.Register(mail.Acheteur)
+	go AcheteurSimple(200)
+	go FournisseurSimple()
 
-	addresses := bob.ListAgents()
-	bob.Send(addresses[0], 42)
-
-	msg, ok := alice.Receive()
-	fmt.Println(msg, ok)
-
-	msg, ok = bob.Receive()
-	fmt.Println(msg, ok)
-
+	select {}
 }
 
 // Mail

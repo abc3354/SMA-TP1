@@ -7,7 +7,7 @@ import (
 
 type Atom struct{}
 
-type Message int
+type Message any
 
 type agent struct {
 	aType AgentType
@@ -71,12 +71,14 @@ func Start(ready chan Atom) {
 			fmt.Println("Quitting")
 		case ReceiveCommand:
 			agent := data.agents[cmd.agentID]
+			fmt.Println(len(agent.inbox))
 			if len(agent.inbox) == 0 {
 				cmd.responder <- Atom{}
 				continue
 			}
 			message := agent.inbox[0]
 			agent.inbox = agent.inbox[1:]
+			data.agents[cmd.agentID] = agent
 			cmd.responder <- message
 		case ListCommand:
 			var listAgent []Address
@@ -103,7 +105,7 @@ const (
 	Acheteur    AgentType = iota
 )
 
-func Register(agentType AgentType) Box {
+func Register(agentType AgentType) *Box {
 	responder := make(chan uuid.UUID)
 
 	data.commands <- RegisterCommand{
@@ -111,51 +113,64 @@ func Register(agentType AgentType) Box {
 		agentType: agentType,
 	}
 
-	return Box(<-responder)
+	return &Box{
+		Address{
+			AgentType: agentType,
+			id:        <-responder,
+		},
+	}
 }
 
-type Box uuid.UUID
+type Box struct {
+	Address
+}
 
 type Address struct {
 	AgentType AgentType
 	id        uuid.UUID
 }
 
-func (box Box) Send(address Address, message Message) {
+func (box *Box) Send(address Address, message Message) {
 	data.commands <- SendCommand{
 		address: address,
 		message: message,
 	}
 }
 
-func (box Box) Receive() (Message, bool) {
+func (box *Box) Receive() (Message, bool) {
 	responder := make(chan any)
 
 	data.commands <- ReceiveCommand{
 		responder: responder,
-		agentID:   uuid.UUID(box),
+		agentID:   box.id,
 	}
 
 	response := <-responder
 	switch result := response.(type) {
 	case Message:
+		fmt.Println("Message")
 		return result, true
 	case Atom:
+		fmt.Println("Atom")
 		return Message(0), false
 	default:
 		panic("unknown")
 	}
 }
 
-func (box Box) ListAgents() []Address {
+func (box *Box) ListAgents() []Address {
 	responder := make(chan []Address)
 
 	data.commands <- ListCommand{
-		agentID:   uuid.UUID(box),
+		agentID:   box.id,
 		responder: responder,
 	}
 
 	return <-responder
+}
+
+func (box *Box) GetMyAddress() Address {
+	return box.Address
 }
 
 func getUUID() uuid.UUID {
