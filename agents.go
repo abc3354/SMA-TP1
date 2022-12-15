@@ -70,7 +70,7 @@ func FournisseurSimple(prixMin int, strategie StrategieFournisseur) {
 	}
 }
 
-func AcheteurSimple(prixMax int, aggressivite int) {
+func AcheteurSimple(prixMax int, aggressivite int, strategie StrategieAcheteur) {
 	comm := mail.Register(mail.Acheteur)
 	fmt.Println("AcheteurSimple lancé")
 
