@@ -1,8 +1,8 @@
 package main
 
-func StrategieAcheteurSimple(offre int, prixMax int, round int) (contreOffre int) {
+func StrategieAcheteurSimple(offre int, prixMax int, round int, aggressivite int) (contreOffre int) {
 	difference := offre - prixMax
-	contreOffre = prixMax - difference
+	contreOffre = prixMax - (difference * aggressivite)
 	return contreOffre
 }
 

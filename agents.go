@@ -44,6 +44,9 @@ func FournisseurSimple(prixMin int) {
 		case MessageAcceptation:
 			fmt.Println("FournisseurSimple : offre acceptée avec le message : ", msg.Message)
 			return
+		case MessageRefus:
+			fmt.Println("FournisseurSimple : offre refusée avec le message : ", msg.Message)
+			return
 		case MessageContreOffre:
 			fmt.Println("FournisseurSimple : Contre offre reçue :", msg.Prix)
 			contreOffre, possible := StrategieVendeurSimple(msg.Prix, memoire[msg.IDOffre], prixMin, msg.Round)
@@ -67,7 +70,7 @@ func FournisseurSimple(prixMin int) {
 	}
 }
 
-func AcheteurSimple(prixMax int) {
+func AcheteurSimple(prixMax int, aggressivite int) {
 	comm := mail.Register(mail.Acheteur)
 	fmt.Println("AcheteurSimple lancé")
 
@@ -76,43 +79,39 @@ func AcheteurSimple(prixMax int) {
 		switch msg := message.(type) {
 		case MessageOffre:
 			fmt.Println("Acheteur simple : Offre reçue :", msg.Prix)
-			if msg.Prix <= prixMax {
-				fmt.Println("AcheteurSimple : acceptation directe prix:", msg.Prix)
-				comm.Send(msg.Fournisseur, MessageAcceptation{
-					IDOffre: msg.ID,
-					Message: "J'accepte l'offre",
-				})
-				return
-			} else {
-				contreOffre := StrategieAcheteurSimple(msg.Prix, prixMax, 1)
-				fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
-				comm.Send(msg.Fournisseur, MessageContreOffre{
-					IDOffre:       msg.ID,
-					Round:         1,
-					Prix:          contreOffre,
-					Interlocuteur: comm.GetMyAddress(),
-				})
-			}
+			contreOffre := StrategieAcheteurSimple(msg.Prix, prixMax, 1, aggressivite)
+			fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
+			comm.Send(msg.Fournisseur, MessageContreOffre{
+				IDOffre:       msg.ID,
+				Round:         1,
+				Prix:          contreOffre,
+				Interlocuteur: comm.GetMyAddress(),
+			})
 		case MessageContreOffre:
-			if msg.Prix <= prixMax {
-				fmt.Println("AcheteurSimple : acceptation contre offre:", msg.Prix)
-				comm.Send(msg.Interlocuteur, MessageAcceptation{
-					IDOffre: msg.IDOffre,
-					Message: "J'accepte l'offre",
-				})
+			if msg.Round == 3 {
+				if msg.Prix <= prixMax {
+					fmt.Println("Acheteur simple : acceptation", msg.Prix)
+					comm.Send(msg.Interlocuteur, MessageAcceptation{
+						IDOffre: msg.IDOffre,
+						Message: "J'accepte l'offre",
+					})
+				} else {
+					fmt.Println("AcheteurSimple : refus", msg.Prix)
+					comm.Send(msg.Interlocuteur, MessageRefus{
+						IDOffre: msg.IDOffre,
+						Message: "Pas d'accord trouvé",
+					})
+				}
 				return
-			} else if msg.Round == 3 {
-				fmt.Println("AcheteurSimple : Trop de rounds")
-			} else {
-				contreOffre := StrategieAcheteurSimple(msg.Prix, prixMax, msg.Round+1)
-				fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
-				comm.Send(msg.Interlocuteur, MessageContreOffre{
-					IDOffre:       msg.IDOffre,
-					Round:         msg.Round + 1,
-					Prix:          contreOffre,
-					Interlocuteur: comm.GetMyAddress(),
-				})
 			}
+			contreOffre := StrategieAcheteurSimple(msg.Prix, prixMax, msg.Round+1, aggressivite)
+			fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
+			comm.Send(msg.Interlocuteur, MessageContreOffre{
+				IDOffre:       msg.IDOffre,
+				Round:         msg.Round + 1,
+				Prix:          contreOffre,
+				Interlocuteur: comm.GetMyAddress(),
+			})
 		case MessageRefus:
 			fmt.Println("AcheteurSimple : offre refusée avec le message : ", msg.Message)
 		}
