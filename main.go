@@ -9,8 +9,8 @@ func main() {
 	go mail.Start(ready)
 	<-ready
 
-	go AcheteurSimple(250, 2)
-	go FournisseurSimple(200)
+	go AcheteurSimple(250, 1, StrategieAcheteurSimple)
+	go FournisseurSimple(200, StrategieVendeurBizarre)
 
 	select {}
 }

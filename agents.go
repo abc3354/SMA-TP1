@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func FournisseurSimple(prixMin int) {
+func FournisseurSimple(prixMin int, strategie StrategieFournisseur) {
 	comm := mail.Register(mail.Fournisseur)
 	fmt.Println("FournisseurSimple lancé")
 
@@ -49,7 +49,7 @@ func FournisseurSimple(prixMin int) {
 			return
 		case MessageContreOffre:
 			fmt.Println("FournisseurSimple : Contre offre reçue :", msg.Prix)
-			contreOffre, possible := StrategieVendeurSimple(msg.Prix, memoire[msg.IDOffre], prixMin, msg.Round)
+			contreOffre, possible := strategie(msg.Prix, memoire[msg.IDOffre], prixMin, msg.Round)
 			if !possible {
 				fmt.Println("FournisseurSimple : prix trop bas")
 				comm.Send(msg.Interlocuteur, MessageRefus{
@@ -79,7 +79,7 @@ func AcheteurSimple(prixMax int, aggressivite int) {
 		switch msg := message.(type) {
 		case MessageOffre:
 			fmt.Println("Acheteur simple : Offre reçue :", msg.Prix)
-			contreOffre := StrategieAcheteurSimple(msg.Prix, prixMax, 1, aggressivite)
+			contreOffre := strategie(msg.Prix, prixMax, 1, aggressivite)
 			fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
 			comm.Send(msg.Fournisseur, MessageContreOffre{
 				IDOffre:       msg.ID,
@@ -88,6 +88,7 @@ func AcheteurSimple(prixMax int, aggressivite int) {
 				Interlocuteur: comm.GetMyAddress(),
 			})
 		case MessageContreOffre:
+			fmt.Println("Acheteur simple : Contre offre reçue :", msg.Prix)
 			if msg.Round == 3 {
 				if msg.Prix <= prixMax {
 					fmt.Println("Acheteur simple : acceptation", msg.Prix)
@@ -104,7 +105,7 @@ func AcheteurSimple(prixMax int, aggressivite int) {
 				}
 				return
 			}
-			contreOffre := StrategieAcheteurSimple(msg.Prix, prixMax, msg.Round+1, aggressivite)
+			contreOffre := strategie(msg.Prix, prixMax, msg.Round+1, aggressivite)
 			fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
 			comm.Send(msg.Interlocuteur, MessageContreOffre{
 				IDOffre:       msg.IDOffre,
