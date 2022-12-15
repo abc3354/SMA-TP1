@@ -71,7 +71,6 @@ func Start(ready chan Atom) {
 			fmt.Println("Quitting")
 		case ReceiveCommand:
 			agent := data.agents[cmd.agentID]
-			fmt.Println(len(agent.inbox))
 			if len(agent.inbox) == 0 {
 				cmd.responder <- Atom{}
 				continue
@@ -147,12 +146,10 @@ func (box *Box) Receive() (Message, bool) {
 
 	response := <-responder
 	switch result := response.(type) {
-	case Message:
-		fmt.Println("Message")
-		return result, true
 	case Atom:
-		fmt.Println("Atom")
 		return Message(0), false
+	case Message:
+		return result, true
 	default:
 		panic("unknown")
 	}
