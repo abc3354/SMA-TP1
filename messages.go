@@ -20,6 +20,18 @@ type MessageAcceptation struct {
 	Message string
 }
 
+type MessageRefus struct {
+	IDOffre uuid.UUID
+	Message string
+}
+
+type MessageContreOffre struct {
+	IDOffre       uuid.UUID
+	Round         int
+	Prix          int
+	Interlocuteur mail.Address
+}
+
 type TypeTransport int
 
 const (

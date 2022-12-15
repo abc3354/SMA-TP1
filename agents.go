@@ -3,10 +3,11 @@ package main
 import (
 	"SMA-TP1/mail"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 )
 
-func FournisseurSimple() {
+func FournisseurSimple(prixMin int) {
 	comm := mail.Register(mail.Fournisseur)
 	fmt.Println("FournisseurSimple lancé")
 
@@ -16,32 +17,57 @@ func FournisseurSimple() {
 		addresses = comm.ListAgents()
 	}
 
+	// calcul de l'offre
+	offre := int(float64(prixMin) * 1.5)
+	memoire := make(map[uuid.UUID]int)
+
 	for _, addresse := range addresses {
 		if addresse.AgentType == mail.Acheteur {
-			fmt.Println("Envoi d'une offre de base")
+			fmt.Println("FournisseurSimple : Envoi d'une offre de base prix", offre)
+			id := randomID()
 			comm.Send(addresse, MessageOffre{
-				ID:            randomID(),
+				ID:            id,
 				Fournisseur:   comm.GetMyAddress(),
-				Prix:          100,
+				Prix:          offre,
 				Reduction:     false,
 				TypeTransport: TransportTrain,
 				Origin:        "Paris",
 				Destination:   "Lyon",
 			})
+			memoire[id] = offre
 		}
 	}
 
-	message := attenteMessage(comm)
-	fmt.Println(">", message)
-	switch msg := message.(type) {
-	case MessageAcceptation:
-		fmt.Println("FournisseurSimple : offre acceptée avec le message : ", msg.Message)
-		return
+	for {
+		message := attenteMessage(comm)
+		switch msg := message.(type) {
+		case MessageAcceptation:
+			fmt.Println("FournisseurSimple : offre acceptée avec le message : ", msg.Message)
+			return
+		case MessageContreOffre:
+			fmt.Println("FournisseurSimple : Contre offre reçue :", msg.Prix)
+			contreOffre, possible := StrategieVendeurSimple(msg.Prix, memoire[msg.IDOffre], prixMin, msg.Round)
+			if !possible {
+				fmt.Println("FournisseurSimple : prix trop bas")
+				comm.Send(msg.Interlocuteur, MessageRefus{
+					IDOffre: msg.IDOffre,
+					Message: "Prix trop bas",
+				})
+				return
+			}
+			fmt.Println("FournisseurSimple : Envoi contre offre :", contreOffre)
+			comm.Send(msg.Interlocuteur, MessageContreOffre{
+				IDOffre:       msg.IDOffre,
+				Round:         msg.Round,
+				Prix:          contreOffre,
+				Interlocuteur: comm.GetMyAddress(),
+			})
+			memoire[msg.IDOffre] = contreOffre
+		}
 	}
-
 }
 
-func AcheteurSimple(prixDesire int) {
+func AcheteurSimple(prixMax int) {
 	comm := mail.Register(mail.Acheteur)
 	fmt.Println("AcheteurSimple lancé")
 
@@ -49,16 +75,46 @@ func AcheteurSimple(prixDesire int) {
 		message := attenteMessage(comm)
 		switch msg := message.(type) {
 		case MessageOffre:
-			fmt.Println("AcheteurSimple : l'offre est ok")
-			if msg.Prix < prixDesire {
+			fmt.Println("Acheteur simple : Offre reçue :", msg.Prix)
+			if msg.Prix <= prixMax {
+				fmt.Println("AcheteurSimple : acceptation directe prix:", msg.Prix)
 				comm.Send(msg.Fournisseur, MessageAcceptation{
 					IDOffre: msg.ID,
 					Message: "J'accepte l'offre",
 				})
 				return
 			} else {
-				fmt.Println("Offre n'accepté pas: Prix plus grand que le désiré.")
+				contreOffre := StrategieAcheteurSimple(msg.Prix, prixMax, 1)
+				fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
+				comm.Send(msg.Fournisseur, MessageContreOffre{
+					IDOffre:       msg.ID,
+					Round:         1,
+					Prix:          contreOffre,
+					Interlocuteur: comm.GetMyAddress(),
+				})
 			}
+		case MessageContreOffre:
+			if msg.Prix <= prixMax {
+				fmt.Println("AcheteurSimple : acceptation contre offre:", msg.Prix)
+				comm.Send(msg.Interlocuteur, MessageAcceptation{
+					IDOffre: msg.IDOffre,
+					Message: "J'accepte l'offre",
+				})
+				return
+			} else if msg.Round == 3 {
+				fmt.Println("AcheteurSimple : Trop de rounds")
+			} else {
+				contreOffre := StrategieAcheteurSimple(msg.Prix, prixMax, msg.Round+1)
+				fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
+				comm.Send(msg.Interlocuteur, MessageContreOffre{
+					IDOffre:       msg.IDOffre,
+					Round:         msg.Round + 1,
+					Prix:          contreOffre,
+					Interlocuteur: comm.GetMyAddress(),
+				})
+			}
+		case MessageRefus:
+			fmt.Println("AcheteurSimple : offre refusée avec le message : ", msg.Message)
 		}
 	}
 
@@ -68,7 +124,6 @@ func attenteMessage(comm *mail.Box) any {
 	for {
 		message, ok := comm.Receive()
 		if ok {
-			fmt.Println(message)
 			return message
 		}
 		time.Sleep(100 * time.Millisecond)
