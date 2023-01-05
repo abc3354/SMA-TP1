@@ -1,7 +1,8 @@
 package main
 
 import (
-	"SMA-TP1/mail"
+	"github.com/arnopensource/SMA-NEGOCIATION-TP1/mail"
+
 	"github.com/google/uuid"
 )
 

@@ -1,4 +1,4 @@
-module SMA-TP1
+module github.com/arnopensource/SMA-NEGOCIATION-TP1
 
 go 1.19
 

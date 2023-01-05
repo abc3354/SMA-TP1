@@ -2,6 +2,7 @@ package mail
 
 import (
 	"fmt"
+
 	"github.com/google/uuid"
 )
 

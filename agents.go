@@ -1,10 +1,12 @@
 package main
 
 import (
-	"SMA-TP1/mail"
 	"fmt"
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/arnopensource/SMA-NEGOCIATION-TP1/mail"
+
+	"github.com/google/uuid"
 )
 
 func FournisseurSimple(prixMin int, strategie StrategieFournisseur) {
