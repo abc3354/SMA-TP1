@@ -12,9 +12,9 @@ import (
 const MaxRound = 5
 const RoundEngageant = 3
 
-func FournisseurSimple(prixMin int, strategie StrategieFournisseur) {
+func FournisseurSimple(prixMin int, strategie StrategieFournisseur, nom string) {
 	comm := mail.Register(mail.Fournisseur)
-	fmt.Println("FournisseurSimple lancé")
+	fmt.Println(nom, "lancé")
 
 	addresses := comm.ListAgents()
 	for len(addresses) == 0 {
@@ -26,9 +26,12 @@ func FournisseurSimple(prixMin int, strategie StrategieFournisseur) {
 	offre := int(float64(prixMin) * 1.5)
 	memoire := make(map[uuid.UUID]int)
 
+	var listeOffres []MessageContreOffre
+	engage := false
+
 	for _, addresse := range addresses {
 		if addresse.AgentType == mail.Acheteur {
-			fmt.Println("FournisseurSimple : Envoi d'une offre de base prix", offre)
+			fmt.Println(nom, ": Envoi d'une offre de base prix", offre)
 			id := randomID()
 			comm.Send(addresse, MessageOffre{
 				ID:            id,
@@ -47,23 +50,32 @@ func FournisseurSimple(prixMin int, strategie StrategieFournisseur) {
 		message := attenteMessage(comm)
 		switch msg := message.(type) {
 		case MessageAcceptation:
-			fmt.Println("FournisseurSimple : offre acceptée avec le message : ", msg.Message)
+			fmt.Println(nom, ": offre acceptée avec le message : ", msg.Message)
 			return
 		case MessageRefus:
-			fmt.Println("FournisseurSimple : offre refusée avec le message : ", msg.Message)
+			fmt.Println(nom, ": offre refusée avec le message : ", msg.Message)
 			return
 		case MessageContreOffre:
-			fmt.Println("FournisseurSimple : Contre offre reçue :", msg.Prix)
+			fmt.Println(nom, ": Contre offre reçue :", msg.Prix)
 			contreOffre, possible := strategie(msg.Prix, memoire[msg.IDOffre], prixMin, msg.Round)
 			if !possible {
-				fmt.Println("FournisseurSimple : prix trop bas")
+				fmt.Println(nom, ": prix trop bas")
 				comm.Send(msg.Interlocuteur, MessageRefus{
 					IDOffre: msg.IDOffre,
 					Message: "Prix trop bas",
 				})
 				return
 			}
-			fmt.Println("FournisseurSimple : Envoi contre offre :", contreOffre)
+			if msg.Round > RoundEngageant && !engage {
+				fmt.Println(nom, ": C'est l'heure d'envoyer une offre engageante !")
+				listeOffres = append(listeOffres, msg)
+				go func() {
+					time.Sleep(time.Second)
+					comm.Send(comm.GetMyAddress(), MessageTimer{})
+				}()
+				continue
+			}
+			fmt.Println(nom, ": Envoi contre offre :", contreOffre)
 			comm.Send(msg.Interlocuteur, MessageContreOffre{
 				IDOffre:       msg.IDOffre,
 				Round:         msg.Round,
@@ -72,70 +84,6 @@ func FournisseurSimple(prixMin int, strategie StrategieFournisseur) {
 				Interlocuteur: comm.GetMyAddress(),
 			})
 			memoire[msg.IDOffre] = contreOffre
-		}
-	}
-}
-
-func AcheteurSimple(prixMax int, aggressivite int, strategie StrategieAcheteur) {
-	comm := mail.Register(mail.Acheteur)
-	fmt.Println("AcheteurSimple lancé")
-
-	var listeOffres []MessageContreOffre
-	var engage = false
-
-	for {
-		message := attenteMessage(comm)
-		switch msg := message.(type) {
-		case MessageOffre:
-			fmt.Println("Acheteur simple : Offre reçue :", msg.Prix)
-			contreOffre := strategie(msg.Prix, prixMax, 1, aggressivite)
-			fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
-			comm.Send(msg.Fournisseur, MessageContreOffre{
-				IDOffre:       msg.ID,
-				Round:         1,
-				Prix:          contreOffre,
-				Interlocuteur: comm.GetMyAddress(),
-			})
-		case MessageContreOffre:
-			fmt.Println("Acheteur simple : Contre offre reçue :", msg.Prix)
-			if msg.Engageant && !engage {
-				fmt.Println("Acheteur simple : C'est l'heure de s'engager !")
-				listeOffres = append(listeOffres, msg)
-				go func() {
-					time.Sleep(time.Second)
-					comm.Send(comm.GetMyAddress(), MessageTimer{})
-				}()
-				continue
-			}
-			if msg.Round == MaxRound {
-				if msg.Prix <= prixMax {
-					fmt.Println("Acheteur simple : acceptation", msg.Prix)
-					comm.Send(msg.Interlocuteur, MessageAcceptation{
-						IDOffre: msg.IDOffre,
-						Message: "J'accepte l'offre",
-					})
-				} else {
-					fmt.Println("AcheteurSimple : refus", msg.Prix)
-					if msg.Engageant {
-						fmt.Println("AcheteurSimple : l'offre était engageante, pénalité appliquée")
-					}
-					comm.Send(msg.Interlocuteur, MessageRefus{
-						IDOffre: msg.IDOffre,
-						Message: "Pas d'accord trouvé",
-					})
-				}
-				return
-			}
-			contreOffre := strategie(msg.Prix, prixMax, msg.Round+1, aggressivite)
-			fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
-			comm.Send(msg.Interlocuteur, MessageContreOffre{
-				IDOffre:       msg.IDOffre,
-				Round:         msg.Round + 1,
-				Prix:          contreOffre,
-				Interlocuteur: comm.GetMyAddress(),
-			})
-		case MessageRefus:
-			fmt.Println("AcheteurSimple : offre refusée avec le message : ", msg.Message)
 		case MessageTimer:
 			if engage {
 				continue
@@ -147,9 +95,102 @@ func AcheteurSimple(prixMax int, aggressivite int, strategie StrategieAcheteur) 
 					best = offre
 				}
 			}
-			fmt.Println("Acheteur simple : Meilleure offre : ", best.Prix)
+			fmt.Println(nom, "simple : Meilleure offre : ", best.Prix)
+			contreOffre, possible := strategie(best.Prix, memoire[best.IDOffre], prixMin, best.Round)
+			if !possible {
+				fmt.Println(nom, ": prix trop bas")
+				comm.Send(best.Interlocuteur, MessageRefus{
+					IDOffre: best.IDOffre,
+					Message: "Prix trop bas",
+				})
+				return
+			}
+			fmt.Println(nom, ": Envoi contre offre :", contreOffre)
+			comm.Send(best.Interlocuteur, MessageContreOffre{
+				IDOffre:       best.IDOffre,
+				Round:         best.Round,
+				Engageant:     true,
+				Prix:          contreOffre,
+				Interlocuteur: comm.GetMyAddress(),
+			})
+		}
+	}
+}
+
+func AcheteurSimple(prixMax int, aggressivite int, strategie StrategieAcheteur, nom string) {
+	comm := mail.Register(mail.Acheteur)
+	fmt.Println(nom, "lancé")
+
+	var listeOffres []MessageContreOffre
+	var engage = false
+
+	for {
+		message := attenteMessage(comm)
+		switch msg := message.(type) {
+		case MessageOffre:
+			fmt.Println(nom, ": Offre reçue :", msg.Prix)
+			contreOffre := strategie(msg.Prix, prixMax, 1, aggressivite)
+			fmt.Println(nom, ": Envoi contre offre :", contreOffre)
+			comm.Send(msg.Fournisseur, MessageContreOffre{
+				IDOffre:       msg.ID,
+				Round:         1,
+				Prix:          contreOffre,
+				Interlocuteur: comm.GetMyAddress(),
+			})
+		case MessageContreOffre:
+			fmt.Println(nom, ": Contre offre reçue :", msg.Prix)
+			if msg.Engageant && !engage {
+				fmt.Println(nom, ": C'est l'heure de s'engager !")
+				listeOffres = append(listeOffres, msg)
+				go func() {
+					time.Sleep(time.Second)
+					comm.Send(comm.GetMyAddress(), MessageTimer{})
+				}()
+				continue
+			}
+			if msg.Round == MaxRound {
+				if msg.Prix <= prixMax {
+					fmt.Println(nom, ": acceptation", msg.Prix)
+					comm.Send(msg.Interlocuteur, MessageAcceptation{
+						IDOffre: msg.IDOffre,
+						Message: "J'accepte l'offre",
+					})
+				} else {
+					fmt.Println(nom, ": refus", msg.Prix)
+					if msg.Engageant {
+						fmt.Println(nom, ": l'offre était engageante, pénalité appliquée")
+					}
+					comm.Send(msg.Interlocuteur, MessageRefus{
+						IDOffre: msg.IDOffre,
+						Message: "Pas d'accord trouvé",
+					})
+				}
+				return
+			}
+			contreOffre := strategie(msg.Prix, prixMax, msg.Round+1, aggressivite)
+			fmt.Println(nom, ": Envoi contre offre :", contreOffre)
+			comm.Send(msg.Interlocuteur, MessageContreOffre{
+				IDOffre:       msg.IDOffre,
+				Round:         msg.Round + 1,
+				Prix:          contreOffre,
+				Interlocuteur: comm.GetMyAddress(),
+			})
+		case MessageRefus:
+			fmt.Println(nom, ": offre refusée avec le message : ", msg.Message)
+		case MessageTimer:
+			if engage {
+				continue
+			}
+			engage = true
+			best := listeOffres[0]
+			for _, offre := range listeOffres {
+				if offre.Prix < best.Prix {
+					best = offre
+				}
+			}
+			fmt.Println(nom, ": Meilleure offre : ", best.Prix)
 			contreOffre := strategie(best.Prix, prixMax, best.Round+1, aggressivite)
-			fmt.Println("Acheteur simple : Envoi contre offre :", contreOffre)
+			fmt.Println(nom, ": Envoi contre offre :", contreOffre)
 			comm.Send(best.Interlocuteur, MessageContreOffre{
 				IDOffre:       best.IDOffre,
 				Round:         best.Round + 1,
