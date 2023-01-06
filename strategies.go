@@ -17,7 +17,7 @@ func StrategieVendeurSimple(offre int, offrePrecedente int, prixMin int, round i
 	if milieu < prixMin {
 		return 0, false
 	}
-	if round < 3 {
+	if round < MaxRound {
 		contreOffre = (milieu + offrePrecedente) / 2
 	} else {
 		contreOffre = milieu

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/arnopensource/SMA-NEGOCIATION-TP1/mail"
+	"time"
 )
 
 func main() {
@@ -10,9 +11,13 @@ func main() {
 	<-ready
 
 	go AcheteurSimple(250, 1, StrategieAcheteurSimple)
+	go FournisseurSimple(200, StrategieVendeurSimple)
+	go FournisseurSimple(250, StrategieVendeurSimple)
 	go FournisseurSimple(200, StrategieVendeurBizarre)
 
-	select {}
+	for {
+		time.Sleep(1 * time.Hour)
+	}
 }
 
 // Mail

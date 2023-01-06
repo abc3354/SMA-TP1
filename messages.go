@@ -29,8 +29,12 @@ type MessageRefus struct {
 type MessageContreOffre struct {
 	IDOffre       uuid.UUID
 	Round         int
+	Engageant     bool
 	Prix          int
 	Interlocuteur mail.Address
+}
+
+type MessageTimer struct {
 }
 
 type TypeTransport int
